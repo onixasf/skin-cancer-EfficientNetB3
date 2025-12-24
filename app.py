@@ -1,219 +1,149 @@
 import streamlit as st
-import tensorflow as tf
+import requests
 import numpy as np
-import json
-from PIL import Image
 import plotly.express as px
-import os
+from PIL import Image
+import io
 
-# ============================================================
+# =========================================================
 # CONFIG
-# ============================================================
-MODEL_PATH = "best_efficientnet.keras"
-CLASS_PATH = "class_names.json"
-IMG_SIZE = (300, 300)
-EDA_DIR = "pics"  # ubah jika folder berbeda
+# =========================================================
+API_URL = "https://onixasf-skin-cancer-efficientnetb3.hf.space/run/predict"
 
-st.set_page_config(page_title="Skin Cancer Dashboard", page_icon="🩺", layout="wide")
+CLASS_DETAILS = {
+    "akiec": "Actinic Keratoses",
+    "bcc": "Basal Cell Carcinoma",
+    "bkl": "Benign Keratosis",
+    "df": "Dermatofibroma",
+    "mel": "Melanoma",
+    "nv": "Melanocytic Nevi",
+    "vasc": "Vascular Lesions"
+}
 
-# ============================================================
-# CSS
-# ============================================================
-st.markdown("""
-<style>
-html, body { font-family: 'Segoe UI', sans-serif; }
-.main-title { font-size: 44px; font-weight: 800; color: ##405d7a; text-align: center; margin-top: -20px; }
-.sub-title { font-size: 20px; color: #566573; text-align: center; margin-bottom: 30px; }
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(
+    page_title="Skin Cancer Classification Dashboard",
+    page_icon="🩺",
+    layout="wide"
+)
 
+# =========================================================
+# HEADER
+# =========================================================
+st.markdown(
+    """
+    <h1 style='text-align:center;'>🩺 Skin Cancer Classification Dashboard</h1>
+    <p style='text-align:center; color:gray;'>
+    EfficientNetB3 · HAM10000 Dataset · Final Project Sains Data
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
-# ============================================================
-# LOAD MODEL
-# ============================================================
-@st.cache_resource
-def load_model():
-    return tf.keras.models.load_model(MODEL_PATH)
-
-@st.cache_resource
-def load_class_names():
-    with open(CLASS_PATH, "r") as f:
-        return json.load(f)
-
-model = load_model()
-class_names = load_class_names()
-
-
-# ============================================================
-# PAGE SELECTION
-# ============================================================
-st.markdown("<div class='main-title'>🩺 Skin Cancer Classification Dashboard</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>EfficientNetB3 — HAM10000 Dataset — Tugas Besar Sains Data</div>", unsafe_allow_html=True)
-
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📌 Dataset Overview",
-    "📊 EDA Visualization",
-    "📈 Model Performance",
-    "🩺 Try Image Prediction"
+# =========================================================
+# TABS
+# =========================================================
+tab1, tab2, tab3 = st.tabs([
+    "📌 Overview",
+    "📈 Model Explanation",
+    "🧪 Try Prediction"
 ])
 
-# ============================================================
-# PAGE 1
-# ============================================================
+# =========================================================
+# TAB 1 – OVERVIEW
+# =========================================================
 with tab1:
-    st.header("📌 Dataset Overview")
+    st.header("📌 Dataset & Project Overview")
+
     st.write("""
-    Dashboard ini menggunakan **dataset HAM10000**, berisi 7 jenis klasifikasi lesi kulit.
-    Pada proyek ini, dikembangkan sistem klasifikasi lengkap mulai dari eksplorasi dan pembersihan data,
-    pelatihan model menggunakan EfficientNetB3, hingga implementasi dashboard interaktif berbasis Streamlit.
+    Proyek ini mengembangkan sistem **klasifikasi kanker kulit**
+    menggunakan **dataset HAM10000** yang terdiri dari 7 kelas lesi kulit.
+
+    Model dilatih menggunakan **EfficientNetB3** dengan pendekatan
+    *transfer learning* dan *fine-tuning* untuk meningkatkan akurasi klasifikasi.
     """)
 
-    st.markdown("### 🧬 Daftar Kelas Diagnosis")
-    class_details = {
-        "akiec": "Actinic Keratoses",
-        "bcc":   "Basal Cell Carcinoma",
-        "bkl":   "Benign Keratosis",
-        "df":    "Dermatofibroma",
-        "mel":   "Melanoma",
-        "nv":    "Melanocytic Nevi",
-        "vasc":  "Vascular Lesions",
-    }
+    st.subheader("🧬 Diagnosis Classes")
+    for k, v in CLASS_DETAILS.items():
+        st.markdown(f"- **{k.upper()}** : {v}")
 
-    list_html = "<ul>"
-    for code, full in class_details.items():
-        list_html += f"<li><b>{code}</b> — {full}</li>"
-    list_html += "</ul>"
-    st.markdown(list_html, unsafe_allow_html=True)
+    st.info("⚠️ Sistem ini bersifat edukatif dan **bukan pengganti diagnosis medis**.")
 
-    st.markdown("---")
-    st.markdown("### ℹ️ Informasi Model")
-    st.write("""
-    - Arsitektur: EfficientNetB3  
-    - Input Size: 300×300  
-    - Fine-tuning + Transfer Learning  
-    - Optimizer: Adam  
-    - Loss: Categorical Crossentropy  
-    """)
-
-# ============================================================
-# PAGE 2
-# ============================================================
+# =========================================================
+# TAB 2 – MODEL EXPLANATION
+# =========================================================
 with tab2:
-    st.header("📊 EDA Visualization")
+    st.header("📈 Model Explanation")
 
-    def show_img(title, filename):
-        st.markdown(f"### {title}")
-        st.image(
-            os.path.join(EDA_DIR, filename),
-            use_container_width=True
-        )
+    st.write("""
+    **EfficientNetB3** merupakan arsitektur CNN modern yang
+    menyeimbangkan **depth, width, dan resolution** secara optimal.
 
-    # ================================
-    # Baris 1 – Grafik Statistik
-    # ================================
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        show_img("🔥 Jumlah Outlier vs Normal", "jumlah_outlier.png")
-        show_img("🎯 Distribusi Umur Pasien", "Age_distribution.png")
-
-    with col2:
-        show_img("🔥 Correlation Heatmap", "correlation_heatmap.png")
-        show_img("📌 Distribusi Kelas Dataset", "class_distribution.png")
-
-    st.divider()
-
-    # ================================
-    # Baris 2 – Samples Overview (diperkecil)
-    # ================================
-    col_left, col_center, col_right = st.columns([1, 2, 1])
-
-    with col_center:
-        show_img("🖼 Samples Overview", "samples_overview.png")
-
-# ============================================================
-# PAGE 3
-# ============================================================
-with tab3:
-    st.header("📈 Model Performance")
-
-    def show_img(title, filename):
-        st.markdown(f"### {title}")
-        st.image(
-            os.path.join(EDA_DIR, filename),
-            use_container_width=True
-        )
-
-    col1, col2 = st.columns([1, 1])  # kiri–kanan seimbang
-
-    with col1:
-        show_img("📈 Kurva Training Model", "Train_curve.png")
-
-    with col2:
-        show_img("🧩 Confusion Matrix", "confusion_matrix.png")
-
-    st.info("""
-    Model **EfficientNetB3** menunjukkan peningkatan performa signifikan dibanding CNN baseline.
-    Model stabil pada validasi akhir dan bekerja baik di seluruh kelas setelah balancing dataset.
+    **Konfigurasi model:**
+    - Input size: 300 × 300
+    - Optimizer: Adam
+    - Loss: Categorical Crossentropy
+    - Dataset balancing
     """)
 
-# ============================================================
-# PAGE 4
-# ============================================================
-with tab4:
-    st.header("🩺 Try Image Prediction")
+    st.success("""
+    Model menunjukkan performa stabil dan peningkatan signifikan
+    dibanding CNN baseline, terutama pada kelas mayoritas dan minoritas.
+    """)
+
+# =========================================================
+# TAB 3 – PREDICTION (API)
+# =========================================================
+with tab3:
+    st.header("🧪 Skin Lesion Prediction (API Based)")
+
     uploaded_file = st.file_uploader(
-        "Upload gambar skin lesion (JPG/PNG)",
+        "Upload gambar lesi kulit (JPG / PNG)",
         type=["jpg", "jpeg", "png"]
     )
 
-    def preprocess(image):
-        img = image.resize(IMG_SIZE)
-        return np.expand_dims(np.array(img) / 255.0, 0)
-
-    def predict(image):
-        x = preprocess(image)
-        probs = model.predict(x)[0]
-        sorted_idx = probs.argsort()[::-1]
-        return probs, sorted_idx
-
     if uploaded_file:
-        col1, col2 = st.columns([1, 1])
+        with st.spinner("🔍 Mengirim gambar ke model..."):
+            image_bytes = uploaded_file.read()
 
-        with col1:
-            st.markdown("### 📷 Preview Image")
-            img = Image.open(uploaded_file).convert("RGB")
-            st.image(img, use_container_width=True)
+            response = requests.post(
+                API_URL,
+                files={"file": image_bytes},
+                timeout=60
+            )
 
-        with col2:
-            st.markdown("### 🔍 Prediction Result")
-            probs, idx = predict(img)
-            top_class = class_names[idx[0]]
-            top_prob = probs[idx[0]]
-            st.success(f"Prediksi: **{top_class.upper()}** ({top_prob:.4f})")
+        if response.status_code == 200:
+            result = response.json()
+
+            pred = result["predicted_class"]
+            conf = result["confidence"]
+            probs = result["probabilities"]
+
+            st.success(
+                f"### 🧠 Prediksi: **{pred.upper()}** — {CLASS_DETAILS[pred]}"
+            )
+            st.write(f"**Confidence:** {conf:.4f}")
 
             fig = px.bar(
-                x=class_names,
-                y=probs,
-                labels={"x": "Kelas", "y": "Probabilitas"},
-                title="Probability per Class",
-                color=probs,
+                x=list(probs.keys()),
+                y=list(probs.values()),
+                labels={"x": "Class", "y": "Probability"},
+                title="Probability Distribution",
+                color=list(probs.values()),
                 color_continuous_scale="Blues"
             )
+
             st.plotly_chart(fig, use_container_width=True)
 
-# ============================================================
-# SIDEBAR FOOTER
-# ============================================================
+        else:
+            st.error("❌ Gagal mendapatkan prediksi dari API")
+
+# =========================================================
+# FOOTER
+# =========================================================
 st.sidebar.markdown("---")
-st.sidebar.markdown(
-    """
-    🩺 **Skin Cancer Classification Dashboard**  
+st.sidebar.markdown("""
+**🩺 Skin Cancer Classification Dashboard**  
 
-    👩🏻‍💻 *Developed by*  
-    **Onixa Shafa Putri Wibowo**  
-    *1227050107*  
-
-    📘 *Final Project – Sains Data*  
-    """
-)
+👩🏻‍💻 **Onixa Shafa Putri Wibowo**  
+📘 Final Project – Sains Data
+""")
